@@ -30,10 +30,8 @@ sudo apt install ros-humble-desktop -y
 # sudo apt install ros-humble-ros-base
 # ROS2 - Devtools
 sudo apt install ros-dev-tools -y
-# Activate ROS2 Environment (change to fit your shell)
-# source /opt/ros/humble/setup.bash
-source /opt/ros/humble/setup.sh
-# source /opt/ros/humble/setup.zsh
+# Activate ROS2 Environment
+source /opt/ros/humble/setup.bash
 # TurtleBot3 Dependencies
 sudo apt install -y \
   python3-colcon-common-extensions \
@@ -59,10 +57,10 @@ cd ~/turtlebot3_ws
 colcon build --symlink-install
 
 ## Environment
-echo 'source ~/turtlebot3_ws/install/setup.bash' >> ~/.bashrc
+echo 'export TURTLEBOT3_MODEL=burger' >> ~/.bashrc
 echo 'export ROS_DOMAIN_ID=30 #TURTLEBOT3' >> ~/.bashrc
+echo 'source /opt/ros/humble/setup.bash' >> ~/.bashrc
+echo 'source ~/turtlebot3_ws/install/setup.bash' >> ~/.bashrc
 echo 'source /usr/share/gazebo/setup.sh' >> ~/.bashrc
 echo 'source /opt/ros/humble/setup.bash' >> ~/.bashrc
 source ~/.bashrc
-
-
