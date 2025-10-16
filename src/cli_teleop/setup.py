@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='yzb2',
     maintainer_email='yzb2@txstate.edu',
-    description='Programming a Command Line Interface for complete teleoperation of Turtlebot3 with OMX Arm ',
+    description='Programming a Command Line Interface for complete teleoperation of Turtlebot3 with OMX Arm',
     license='MIT',
     extras_require={
         'test': [
