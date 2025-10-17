@@ -127,7 +127,7 @@ class TeleopController(Node):
 
         self.base_twist_pub.publish(self.cmd_vel)
 
-    def inc_linear(self):                    
+    def inc_linear(self):
         self.cmd_vel.linear.x = min(self.cmd_vel.linear.x + BASE_LINEAR_VEL_STEP, BASE_LINEAR_VEL_MAX)
         self.cmd_vel.linear.y = 0.0
         self.cmd_vel.linear.z = 0.0
@@ -146,7 +146,7 @@ class TeleopController(Node):
         self.cmd_vel.angular.x = 0.0
         self.cmd_vel.angular.y = 0.0
         self.cmd_vel.angular.z = max(self.cmd_vel.angular.z - BASE_ANGULAR_VEL_STEP, -BASE_ANGULAR_VEL_MAX)
-    
+
     def stop(self):
         self.cmd_vel = Twist()
         # self._send_cmd_vel(0.0, 0.0)
