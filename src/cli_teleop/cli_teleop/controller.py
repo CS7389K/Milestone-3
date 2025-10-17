@@ -1,72 +1,144 @@
-from dataclasses import dataclass
+import sys
+import os
+import signal
+import time
+import threading
+import tty
+import termios
 
-from .constants import (
-    JOINT_LIMITS,
-    LIN_STEP,
-    MIN_LINEAR,
-    MAX_LINEAR,
-    ANG_STEP,
-    MIN_ANGULAR,
-    MAX_ANGULAR
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.node import Node
+
+from geometry_msgs.msg import Twist
+from control_msgs.msg import JointJog
+from control_msgs.action import GripperCommand
+from std_srvs.srv import Trigger
+
+from .util.constants import (
+    BASE_TWIST_TOPIC,
+    ARM_JOINT_TOPIC,
+    GRIPPER_ACTION,
+    ROS_QUEUE_SIZE,
+    BASE_LINEAR_VEL_MAX,
+    BASE_LINEAR_VEL_STEP,
+    BASE_ANGULAR_VEL_MAX,
+    BASE_ANGULAR_VEL_STEP,
+    BASE_FRAME_ID,
+    ARM_JOINT_VEL,
+    SERVO_START_SRV,
+    SERVO_STOP_SRV
 )
-from .errors import ValidationError
+from .util.errors import ValidationError
 
 
-@dataclass
-class BaseState:
-    linear: float = 0.0
-    angular: float = 0.0
-    x: float = 0.0  # odom estimates — replace with live data if available
-    y: float = 0.0
-    z: float = 0.0
+class TeleopController(Node):
+    """
+    Based on turtlebot3_manipulation_teleop:
+    - https://github.com/ROBOTIS-GIT/turtlebot3_manipulation/blob/humble/turtlebot3_manipulation_teleop/src/turtlebot3_manipulation_teleop.cpp
+    - https://github.com/ROBOTIS-GIT/turtlebot3_manipulation/blob/humble/turtlebot3_manipulation_teleop/include/turtlebot3_manipulation_teleop/turtlebot3_manipulation_teleop.hpp
+    """
 
-
-@dataclass
-class ArmState:
-    J1: float = 0.0
-    J2: float = 0.0
-    J3: float = 0.0
-    J4: float = 0.0
-    gripper_open: bool = True
-
-
-@dataclass
-class RobotState:
-    base: BaseState = BaseState()
-    arm: ArmState = ArmState()
-
-
-class TeleopController:
     def __init__(self):
-        self.state = RobotState()
+        # Create node interactions
+        self.base_twist_pub = self.create_publisher(Twist, BASE_TWIST_TOPIC, ROS_QUEUE_SIZE)
+        self.joint_pub = self.create_publisher(JointJog, ARM_JOINT_TOPIC, ROS_QUEUE_SIZE)
+        self.servo_start_client = self.create_client(Trigger, SERVO_START_SRV)
+        self.servo_stop_client  = self.create_client(Trigger, SERVO_STOP_SRV)
+        self.gripper_client = ActionClient(self, GripperCommand, GRIPPER_ACTION)
+        self.pub_timer = self.create_timer(0.01, self._publish_loop)
 
-    # --- Validation helpers ---
-    def _clamp(self, val: float, lo: float, hi: float) -> float:
-        return max(lo, min(hi, val))
+        # State
+        self.cmd_vel = Twist()
+        self.publish_joint_pending = False
+        self.joint_msg = JointJog()
+        self.joint_msg.header.frame_id = BASE_FRAME_ID
 
-    def _validate_joint_pose(self, pose: dict):
-        missing = [j for j in JOINT_LIMITS if j not in pose]
-        if missing:
-            raise ValidationError(f"Pose missing joints: {missing}")
-        for j, (lo, hi) in JOINT_LIMITS.items():
-            v = pose[j]
-            if not (lo <= v <= hi):
-                raise ValidationError(f"{j}={v:.3f} out of limits [{lo:.3f}, {hi:.3f}]")
+        # Start moveit interface
+        self._connect_moveit_servo()
+        self._start_moveit_servo()
 
-    # --- Backend stubs (replace with ROS/SDK calls) ---
-    def _send_cmd_vel(self, linear: float, angular: float):
-        # Example: publish to /cmd_vel; raise BackendError on failure
-        pass
+        # Start keyboard loop in a background thread
+        self._run = True
+        self.kb_thread = threading.Thread(target=self._key_loop, daemon=True)
+        self.kb_thread.start()
 
-    def _send_arm_pose(self, pose: dict):
-        # Example: send JointTrajectory; raise BackendError on failure
-        pass
 
-    def _send_gripper(self, open_: bool):
-        # Example: control gripper; raise BackendError on failure
-        pass
+    def _connect_moveit_servo(self):
+        for i in range(10):
+            if self.servo_start_client.wait_for_service(timeout_sec=1.0):
+                self.get_logger().info('SUCCESS TO CONNECT SERVO START SERVER')
+                break
+            self.get_logger().warn('WAIT TO CONNECT SERVO START SERVER')
+            if i == 9:
+                self.get_logger().error(
+                    "fail to connect moveit_servo. please launch 'servo.launch' from the MoveIt config package."
+                )
 
-    # --- Command handlers with error checks ---
+        for i in range(10):
+            if self.servo_stop_client.wait_for_service(timeout_sec=1.0):
+                self.get_logger().info('SUCCESS TO CONNECT SERVO STOP SERVER')
+                break
+            self.get_logger().warn('WAIT TO CONNECT SERVO STOP SERVER')
+            if i == 9:
+                self.get_logger().error(
+                    "fail to connect moveit_servo. please launch 'servo.launch' from the MoveIt config package."
+                )
+
+    def _start_moveit_servo(self):
+        self.get_logger().info("call 'moveit_servo' start srv.")
+        if not self.servo_start_client.service_is_ready():
+            self.get_logger().warn("start_servo service not ready; continuing without moveit_servo.")
+            return
+        future = self.servo_start_client.call_async(Trigger.Request())
+        rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
+        if future.done() and future.result():
+            self.get_logger().info("SUCCESS to start 'moveit_servo'")
+        else:
+            self.get_logger().error("FAIL to start 'moveit_servo', executing without 'moveit_servo'")
+
+
+    def _stop_moveit_servo(self):
+        self.get_logger().info("call 'moveit_servo' END srv.")
+        if not self.servo_stop_client.service_is_ready():
+            return
+        future = self.servo_stop_client.call_async(Trigger.Request())
+        rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
+
+
+    def send_gripper_goal(self, position: float):
+        """
+        position (meters): positive to open (~0.025), negative to close (~-0.015)
+        """
+        if not self.gripper_client.server_is_ready():
+            self.get_logger().warn('Gripper action server not ready.')
+            return
+
+        goal = GripperCommand.Goal()
+        goal.command.position = float(position)
+        goal.command.max_effort = -1.0
+
+        self.get_logger().info('Sending gripper goal')
+        self.gripper_client.send_goal_async(goal).add_done_callback(self._on_gripper_goal_sent)
+
+
+    def _on_gripper_goal_sent(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().warn('Gripper goal rejected')
+            return
+        goal_handle.get_result_async().add_done_callback(self._on_gripper_result)
+
+
+    def _on_gripper_result(self, future):
+        result = future.result()
+        _ = result
+
+    def shutdown(self):
+        self._stop_moveit_servo()
+
+
+
     def inc_linear(self):
         before = self.state.base.linear
         self.state.base.linear = self._clamp(before + LIN_STEP, MIN_LINEAR, MAX_LINEAR)

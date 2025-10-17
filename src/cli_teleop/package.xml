@@ -9,6 +9,8 @@
 
   <depend>rclpy</depend>
   <depend>control_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>open_manipulator_msgs</depend>
 
   <test_depend>ament_copyright</test_depend>
