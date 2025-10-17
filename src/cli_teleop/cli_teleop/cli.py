@@ -119,7 +119,7 @@ class CLI():
                 self.controller.move_pose(CUSTOM_POSE)
             elif cmd == Cmd.QUIT:
                 raise SystemExit
-        
+
     def print_menu(self):
         s = self.controller.state
         sys.stdout.write(MENU.format(

@@ -140,7 +140,7 @@ class TeleopController(Node):
     def inc_ang(self):
         self.cmd_vel.angular.x = 0.0
         self.cmd_vel.angular.y = 0.0
-        self.cmd_vel.angular.z = min(self.cmd_vel.angular.z + BASE_ANGULAR_VEL_STEP, BASE_ANGULAR_VEL_MAX) 
+        self.cmd_vel.angular.z = min(self.cmd_vel.angular.z + BASE_ANGULAR_VEL_STEP, BASE_ANGULAR_VEL_MAX)
 
     def dec_ang(self):
         self.cmd_vel.angular.x = 0.0
@@ -149,13 +149,12 @@ class TeleopController(Node):
 
     def stop(self):
         self.cmd_vel = Twist()
-        # self._send_cmd_vel(0.0, 0.0)
 
     def gripper_open(self):
-        pass
+        self.send_gripper_goal(0.025)
 
     def gripper_close(self):
-        pass
+        self.send_gripper_goal(-0.015)
 
     def move_pose(self, pose: dict):
         pass
