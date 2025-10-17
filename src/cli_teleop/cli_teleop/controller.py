@@ -20,7 +20,6 @@ from .util.constants import (
     BASE_FRAME_ID,
     SERVO_START_SRV,
     SERVO_STOP_SRV,
-    ARM_JOINT_VEL,
     POSES
 )
 

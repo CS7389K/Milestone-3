@@ -15,11 +15,6 @@ from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 
 from .controller import TeleopController
-from .util.constants import (
-    EXTEND_POSE,
-    HOME_POSE,
-    CUSTOM_POSE,
-)
 
 
 class Cmd(Enum):
@@ -339,13 +334,13 @@ class CLI:
             elif cmd == Cmd.GRIP_CLOSE:
                 self.controller.gripper_close()
             elif cmd == Cmd.ARM_EXTEND:
-                self.controller.move_pose(EXTEND_POSE)
+                self.controller.move_pose("extend")
                 self.controller.get_logger().info('Moving arm to extend pose')
             elif cmd == Cmd.ARM_HOME:
-                self.controller.move_pose(HOME_POSE)
+                self.controller.move_pose("home")
                 self.controller.get_logger().info('Moving arm to home pose')
             elif cmd == Cmd.ARM_CUSTOM:
-                self.controller.move_pose(CUSTOM_POSE)
+                self.controller.move_pose("custom")
                 self.controller.get_logger().info('Moving arm to custom pose')
             elif cmd == Cmd.QUIT:
                 self.running = False

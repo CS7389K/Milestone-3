@@ -16,7 +16,7 @@ def main():
 
     signal.signal(signal.SIGINT, _sigint_handler)
     cli.start()
-    
+
 
 if __name__ == "__main__":
     main()
