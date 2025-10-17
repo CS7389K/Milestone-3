@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'cli = cli_teleop.main:main'
         ],
     },
 )

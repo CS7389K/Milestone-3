@@ -78,6 +78,11 @@ class CLI():
 
     def start(self):
         try:
+            # Setup
+            self.kb_thread = threading.Thread(target=self.cli_loop, daemon=True)
+            self.kb_thread.start()
+            self.print_menu()
+            # Loop
             while rclpy.ok() and self.running:
                 rclpy.spin_once(self.controller, timeout_sec=0.1)
                 time.sleep(0.01)
@@ -85,14 +90,7 @@ class CLI():
             self.controller.shutdown()
             rclpy.try_shutdown()
 
-        self.print_menu()
-        self.kb_thread = threading.Thread(target=self.cli_loop, daemon=True)
-        self.kb_thread.start()
-
-    def cli_loop(
-            self,
-            key: str
-        ):
+    def cli_loop(self):
         while rclpy.ok() and self.running:
             key = sys.stdin.readline().strip().lower()
             if key not in KEYMAP:

@@ -1,11 +1,3 @@
-import sys
-import os
-import signal
-import time
-import threading
-import tty
-import termios
-
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
@@ -26,11 +18,9 @@ from .util.constants import (
     BASE_ANGULAR_VEL_MAX,
     BASE_ANGULAR_VEL_STEP,
     BASE_FRAME_ID,
-    ARM_JOINT_VEL,
     SERVO_START_SRV,
     SERVO_STOP_SRV
 )
-from .util.errors import ValidationError
 
 
 class TeleopController(Node):
@@ -48,7 +38,7 @@ class TeleopController(Node):
         self.base_twist_pub = self.create_publisher(Twist, BASE_TWIST_TOPIC, ROS_QUEUE_SIZE)
         self.joint_pub = self.create_publisher(JointJog, ARM_JOINT_TOPIC, ROS_QUEUE_SIZE)
         self.gripper_client = ActionClient(self, GripperCommand, GRIPPER_ACTION)
-        self.pub_timer = self.create_timer(0.01, self._publish_loop)
+        self.pub_timer = self.create_timer(0.01, self.publish_loop)
 
         # State
         self.cmd_vel = Twist()
@@ -57,15 +47,10 @@ class TeleopController(Node):
         self.joint_msg.header.frame_id = BASE_FRAME_ID
 
         # Start moveit interface
-        self._connect_moveit_servo()
-        self._start_moveit_servo()
+        self.connect_moveit_servo()
+        self.start_moveit_servo()
 
-        # Start keyboard loop in a background thread
-        self._run = True
-        self.kb_thread = threading.Thread(target=self._key_loop, daemon=True)
-        self.kb_thread.start()
-
-    def _connect_moveit_servo(self):
+    def connect_moveit_servo(self):
         for i in range(10):
             if self.servo_start_client.wait_for_service(timeout_sec=1.0):
                 self.get_logger().info('SUCCESS TO CONNECT SERVO START SERVER')
@@ -86,7 +71,7 @@ class TeleopController(Node):
                     "fail to connect moveit_servo. please launch 'servo.launch' from the MoveIt config package."
                 )
 
-    def _start_moveit_servo(self):
+    def start_moveit_servo(self):
         self.get_logger().info("call 'moveit_servo' start srv.")
         if not self.servo_start_client.service_is_ready():
             self.get_logger().warn("start_servo service not ready; continuing without moveit_servo.")
@@ -98,7 +83,7 @@ class TeleopController(Node):
         else:
             self.get_logger().error("FAIL to start 'moveit_servo', executing without 'moveit_servo'")
 
-    def _stop_moveit_servo(self):
+    def stop_moveit_servo(self):
         self.get_logger().info("call 'moveit_servo' END srv.")
         if not self.servo_stop_client.service_is_ready():
             return
@@ -118,21 +103,21 @@ class TeleopController(Node):
         goal.command.max_effort = -1.0
 
         self.get_logger().info('Sending gripper goal')
-        self.gripper_client.send_goal_async(goal).add_done_callback(self._on_gripper_goal_sent)
+        self.gripper_client.send_goal_async(goal).add_done_callback(self.on_gripper_goal_sent)
 
-    def _on_gripper_goal_sent(self, future):
+    def on_gripper_goal_sent(self, future):
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().warn('Gripper goal rejected')
             return
-        goal_handle.get_result_async().add_done_callback(self._on_gripper_result)
+        goal_handle.get_result_async().add_done_callback(self.on_gripper_result)
 
 
-    def _on_gripper_result(self, future):
+    def on_gripper_result(self, future):
         result = future.result()
         _ = result
 
-    def _publish_loop(self):
+    def publish_loop(self):
         if self.publish_joint_pending:
             self.joint_msg.header.stamp = self.get_clock().now().to_msg()
             self.joint_msg.header.frame_id = BASE_FRAME_ID
@@ -176,4 +161,4 @@ class TeleopController(Node):
         pass
 
     def shutdown(self):
-        self._stop_moveit_servo()
+        self.stop_moveit_servo()
