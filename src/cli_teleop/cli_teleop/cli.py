@@ -1,5 +1,4 @@
 import sys
-import signal
 import rclpy
 import time
 import threading
@@ -7,12 +6,6 @@ import threading
 from enum import Enum, auto
 
 from .controller import TeleopController
-from .util.constants import (
-    EXTEND_POSE,
-    HOME_POSE,
-    CUSTOM_POSE,
-)
-from .util.errors import ValidationError
 
 
 class Cmd(Enum):
@@ -112,11 +105,11 @@ class CLI():
             elif cmd == Cmd.GRIP_CLOSE:
                 self.controller.gripper_close()
             elif cmd == Cmd.ARM_EXTEND:
-                self.controller.move_pose(EXTEND_POSE)
+                self.controller.move_pose("extend")
             elif cmd == Cmd.ARM_HOME:
-                self.controller.move_pose(HOME_POSE)
+                self.controller.move_pose("home")
             elif cmd == Cmd.ARM_CUSTOM:
-                self.controller.move_pose(CUSTOM_POSE)
+                self.controller.move_pose("custom")
             elif cmd == Cmd.QUIT:
                 raise SystemExit
 

@@ -18,6 +18,8 @@ BASE_ANGULAR_VEL_STEP = 0.1  # rad/s
 BASE_FRAME_ID = 'link0'
 ARM_JOINT_VEL = 10.0  # rad/s
 
-HOME_POSE = {"J1": 0.0, "J2": 0.0, "J3": 0.0, "J4": 0.0}
-EXTEND_POSE = {"J1": 0.0, "J2": 0.0, "J3": 0.0, "J4": 0.0}
-CUSTOM_POSE = {"J1": 0.0, "J2": 0.0, "J3": 0.0, "J4": 0.0}
+POSES = dict(
+    home={"joint1": 10.0, "joint2": 0.0, "joint3": 0.0, "joint4": 0.0},
+    extend={"joint1": 0.0, "joint2": 10.0, "joint3": 0.0, "joint4": 0.0},
+    custom={"joint1": 0.0, "joint3": 0.0, "joint3": 10.0, "joint4": 0.0}
+)

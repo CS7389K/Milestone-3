@@ -19,7 +19,9 @@ from .util.constants import (
     BASE_ANGULAR_VEL_STEP,
     BASE_FRAME_ID,
     SERVO_START_SRV,
-    SERVO_STOP_SRV
+    SERVO_STOP_SRV,
+    ARM_JOINT_VEL,
+    POSES
 )
 
 
@@ -110,12 +112,7 @@ class TeleopController(Node):
         if not goal_handle.accepted:
             self.get_logger().warn('Gripper goal rejected')
             return
-        goal_handle.get_result_async().add_done_callback(self.on_gripper_result)
-
-
-    def on_gripper_result(self, future):
-        result = future.result()
-        _ = result
+        goal_handle.get_result_async()
 
     def publish_loop(self):
         if self.publish_joint_pending:
@@ -156,8 +153,12 @@ class TeleopController(Node):
     def gripper_close(self):
         self.send_gripper_goal(-0.015)
 
-    def move_pose(self, pose: dict):
-        pass
+    def move_pose(self, key: str):
+        if key in POSES:
+            for i, (joint, value) in enumerate(POSES[key]):
+                self.joint_msg_.joint_names.push_back(joint)
+                self.joint_msg_.velocities.push_back(value)
+            self.publish_joint_pending = True
 
     def shutdown(self):
         self.stop_moveit_servo()
