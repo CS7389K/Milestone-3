@@ -3,7 +3,7 @@ import time
 import signal
 
 from .controller import TeleopController
-from .cli import print_menu, handle_key
+from .util.cli import print_menu, handle_key
 from .errors import ValidationError, BackendError
 
 

@@ -1,1 +1,4 @@
-colcon build --symlink-install
+#!/bin/sh
+. ~/.bashrc
+colcon build
+. install/setup.sh

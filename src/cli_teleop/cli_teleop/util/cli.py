@@ -1,13 +1,13 @@
 import sys
 from enum import Enum, auto
 
-from .controller import TeleopController
-from .constants import (
+from ..controller import TeleopController
+from ..constants import (
     EXTEND_POSE,
     HOME_POSE,
     CUSTOM_POSE,
 )
-from .errors import ValidationError
+from ..errors import ValidationError
 
 
 class Cmd(Enum):
