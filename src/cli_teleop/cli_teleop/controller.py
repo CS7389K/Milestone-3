@@ -16,6 +16,7 @@ from control_msgs.action import GripperCommand
 from std_srvs.srv import Trigger
 
 from .util.constants import (
+    CONTROLLER_NAME,
     BASE_TWIST_TOPIC,
     ARM_JOINT_TOPIC,
     GRIPPER_ACTION,
@@ -40,11 +41,12 @@ class TeleopController(Node):
     """
 
     def __init__(self):
+        super().__init__(CONTROLLER_NAME)
         # Create node interactions
-        self.base_twist_pub = self.create_publisher(Twist, BASE_TWIST_TOPIC, ROS_QUEUE_SIZE)
-        self.joint_pub = self.create_publisher(JointJog, ARM_JOINT_TOPIC, ROS_QUEUE_SIZE)
         self.servo_start_client = self.create_client(Trigger, SERVO_START_SRV)
         self.servo_stop_client  = self.create_client(Trigger, SERVO_STOP_SRV)
+        self.base_twist_pub = self.create_publisher(Twist, BASE_TWIST_TOPIC, ROS_QUEUE_SIZE)
+        self.joint_pub = self.create_publisher(JointJog, ARM_JOINT_TOPIC, ROS_QUEUE_SIZE)
         self.gripper_client = ActionClient(self, GripperCommand, GRIPPER_ACTION)
         self.pub_timer = self.create_timer(0.01, self._publish_loop)
 
@@ -62,7 +64,6 @@ class TeleopController(Node):
         self._run = True
         self.kb_thread = threading.Thread(target=self._key_loop, daemon=True)
         self.kb_thread.start()
-
 
     def _connect_moveit_servo(self):
         for i in range(10):
@@ -97,14 +98,12 @@ class TeleopController(Node):
         else:
             self.get_logger().error("FAIL to start 'moveit_servo', executing without 'moveit_servo'")
 
-
     def _stop_moveit_servo(self):
         self.get_logger().info("call 'moveit_servo' END srv.")
         if not self.servo_stop_client.service_is_ready():
             return
         future = self.servo_stop_client.call_async(Trigger.Request())
         rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
-
 
     def send_gripper_goal(self, position: float):
         """
@@ -121,7 +120,6 @@ class TeleopController(Node):
         self.get_logger().info('Sending gripper goal')
         self.gripper_client.send_goal_async(goal).add_done_callback(self._on_gripper_goal_sent)
 
-
     def _on_gripper_goal_sent(self, future):
         goal_handle = future.result()
         if not goal_handle.accepted:
@@ -134,52 +132,48 @@ class TeleopController(Node):
         result = future.result()
         _ = result
 
-    def shutdown(self):
-        self._stop_moveit_servo()
+    def _publish_loop(self):
+        if self.publish_joint_pending:
+            self.joint_msg.header.stamp = self.get_clock().now().to_msg()
+            self.joint_msg.header.frame_id = BASE_FRAME_ID
+            self.joint_pub.publish(self.joint_msg)
+            self.publish_joint_pending = False
+            self.get_logger().info("Joint PUB")
 
+        self.base_twist_pub.publish(self.cmd_vel)
 
-
-    def inc_linear(self):
-        before = self.state.base.linear
-        self.state.base.linear = self._clamp(before + LIN_STEP, MIN_LINEAR, MAX_LINEAR)
-        self._send_cmd_vel(self.state.base.linear, self.state.base.angular)
+    def inc_linear(self):                    
+        self.cmd_vel.linear.x = min(self.cmd_vel.linear.x + BASE_LINEAR_VEL_STEP, BASE_LINEAR_VEL_MAX)
+        self.cmd_vel.linear.y = 0.0
+        self.cmd_vel.linear.z = 0.0
 
     def dec_linear(self):
-        before = self.state.base.linear
-        self.state.base.linear = self._clamp(before - LIN_STEP, MIN_LINEAR, MAX_LINEAR)
-        self._send_cmd_vel(self.state.base.linear, self.state.base.angular)
+        self.cmd_vel.linear.x = max(self.cmd_vel.linear.x - BASE_LINEAR_VEL_STEP, -BASE_LINEAR_VEL_MAX)
+        self.cmd_vel.linear.y = 0.0
+        self.cmd_vel.linear.z = 0.0
 
     def inc_ang(self):
-        before = self.state.base.angular
-        self.state.base.angular = self._clamp(before + ANG_STEP, MIN_ANGULAR, MAX_ANGULAR)
-        self._send_cmd_vel(self.state.base.linear, self.state.base.angular)
+        self.cmd_vel.angular.x = 0.0
+        self.cmd_vel.angular.y = 0.0
+        self.cmd_vel.angular.z = min(self.cmd_vel.angular.z + BASE_ANGULAR_VEL_STEP, BASE_ANGULAR_VEL_MAX) 
 
     def dec_ang(self):
-        before = self.state.base.angular
-        self.state.base.angular = self._clamp(before - ANG_STEP, MIN_ANGULAR, MAX_ANGULAR)
-        self._send_cmd_vel(self.state.base.linear, self.state.base.angular)
-
+        self.cmd_vel.angular.x = 0.0
+        self.cmd_vel.angular.y = 0.0
+        self.cmd_vel.angular.z = max(self.cmd_vel.angular.z - BASE_ANGULAR_VEL_STEP, -BASE_ANGULAR_VEL_MAX)
+    
     def stop(self):
-        self.state.base.linear = 0.0
-        self.state.base.angular = 0.0
-        self._send_cmd_vel(0.0, 0.0)
+        self.cmd_vel = Twist()
+        # self._send_cmd_vel(0.0, 0.0)
 
     def gripper_open(self):
-        if self.state.arm.gripper_open:
-            # Not an error; just no-op
-            return
-        self._send_gripper(True)
-        self.state.arm.gripper_open = True
+        pass
 
     def gripper_close(self):
-        if not self.state.arm.gripper_open:
-            return
-        self._send_gripper(False)
-        self.state.arm.gripper_open = False
+        pass
 
     def move_pose(self, pose: dict):
-        self._validate_joint_pose(pose)
-        self._send_arm_pose(pose)
-        # If successful, update local state
-        for j in ["J1", "J2", "J3", "J4"]:
-            setattr(self.state.arm, j, pose[j])
+        pass
+
+    def shutdown(self):
+        self._stop_moveit_servo()

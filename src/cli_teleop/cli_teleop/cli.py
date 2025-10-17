@@ -2,6 +2,7 @@ import sys
 import signal
 import rclpy
 import time
+import threading
 
 from enum import Enum, auto
 
@@ -85,39 +86,41 @@ class CLI():
             rclpy.try_shutdown()
 
         self.print_menu()
-        key = sys.stdin.readline().strip().lower()
-        self.handle_input(key)
+        self.kb_thread = threading.Thread(target=self.cli_loop, daemon=True)
+        self.kb_thread.start()
 
-    def handle_input(
+    def cli_loop(
             self,
             key: str
         ):
-        if key not in KEYMAP:
-            print(f"Unknown input '{key}'. Valid keys: {', '.join(KEYMAP.keys())}")
+        while rclpy.ok() and self.running:
+            key = sys.stdin.readline().strip().lower()
+            if key not in KEYMAP:
+                continue
 
-        cmd = KEYMAP[key]
-        if cmd == Cmd.INC_LINEAR:
-            self.controller.inc_linear()
-        elif cmd == Cmd.DEC_LINEAR:
-            self.controller.dec_linear()
-        elif cmd == Cmd.INC_ANG:
-            self.controller.inc_ang()
-        elif cmd == Cmd.DEC_ANG:
-            self.controller.dec_ang()
-        elif cmd == Cmd.STOP:
-            self.controller.stop()
-        elif cmd == Cmd.GRIP_OPEN:
-            self.controller.gripper_open()
-        elif cmd == Cmd.GRIP_CLOSE:
-            self.controller.gripper_close()
-        elif cmd == Cmd.ARM_EXTEND:
-            self.controller.move_pose(EXTEND_POSE)
-        elif cmd == Cmd.ARM_HOME:
-            self.controller.move_pose(HOME_POSE)
-        elif cmd == Cmd.ARM_CUSTOM:
-            self.controller.move_pose(CUSTOM_POSE)
-        elif cmd == Cmd.QUIT:
-            raise SystemExit
+            cmd = KEYMAP[key]
+            if cmd == Cmd.INC_LINEAR:
+                self.controller.inc_linear()
+            elif cmd == Cmd.DEC_LINEAR:
+                self.controller.dec_linear()
+            elif cmd == Cmd.INC_ANG:
+                self.controller.inc_ang()
+            elif cmd == Cmd.DEC_ANG:
+                self.controller.dec_ang()
+            elif cmd == Cmd.STOP:
+                self.controller.stop()
+            elif cmd == Cmd.GRIP_OPEN:
+                self.controller.gripper_open()
+            elif cmd == Cmd.GRIP_CLOSE:
+                self.controller.gripper_close()
+            elif cmd == Cmd.ARM_EXTEND:
+                self.controller.move_pose(EXTEND_POSE)
+            elif cmd == Cmd.ARM_HOME:
+                self.controller.move_pose(HOME_POSE)
+            elif cmd == Cmd.ARM_CUSTOM:
+                self.controller.move_pose(CUSTOM_POSE)
+            elif cmd == Cmd.QUIT:
+                raise SystemExit
         
     def print_menu(self):
         s = self.controller.state
