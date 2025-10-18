@@ -18,7 +18,7 @@ ARM_JOINT_VEL = 10
 
 
 POSES = {
-    "home":   {"joint1": 10.0,  "joint2": 0.0, "joint3": 0.0, "joint4": 0.0},
-    "extend": {"joint1": 5.0,  "joint2":  0.0, "joint3":  0.0, "joint4": 0.0},
-    "custom": {"joint1": -0.5,  "joint2":  0.0, "joint3": 0.0, "joint4": 0.0},
+    "home":   {"joint2": 10.0,  "joint1": 0.0, "joint3": 0.0, "joint4": 0.0},
+    "extend": {"joint2": 5.0,  "joint1":  0.0, "joint3":  0.0, "joint4": 0.0},
+    "custom": {"joint2": -0.5,  "joint1":  0.0, "joint3": 0.0, "joint4": 0.0},
 }
