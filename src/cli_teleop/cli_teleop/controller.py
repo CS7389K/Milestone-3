@@ -1,7 +1,6 @@
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
-import time 
 
 from geometry_msgs.msg import Twist
 from control_msgs.msg import JointJog
@@ -44,7 +43,12 @@ class TeleopController(Node):
 
         # State
         self.cmd_vel = Twist()
-        self.publish_joint_pending = False
+        
+        # Joint command state - Continuous publishing for MoveIt Servo
+        self.active_joint_cmd = None  # Stores current joint command to publish continuously
+        self.joint_cmd_count = 0      # Counter for how many times to publish
+        self.joint_cmd_duration = 150  # Publish for 1.5 seconds (150 * 0.01s = 1.5s)
+        
         self.joint_msg = JointJog()
         self.joint_msg.header.frame_id = BASE_FRAME_ID
 
@@ -113,12 +117,30 @@ class TeleopController(Node):
         goal_handle.get_result_async()
 
     def publish_loop(self):
-        if self.publish_joint_pending:
-            self.joint_msg.header.stamp = self.get_clock().now().to_msg()
-            self.joint_msg.header.frame_id = BASE_FRAME_ID
-            self.joint_pub.publish(self.joint_msg)
-            self.publish_joint_pending = False
+        """
+        Published at 100Hz.
+        
+        CRITICAL FOR SERVO: MoveIt Servo expects continuous velocity commands.
+        If commands stop, the robot stops moving (safety feature).
+        We publish the same command repeatedly for 1.5 seconds.
+        """
+        # Publish joint commands if active
+        if self.active_joint_cmd is not None and self.joint_cmd_count > 0:
+            # Update timestamp for each publish
+            self.active_joint_cmd.header.stamp = self.get_clock().now().to_msg()
+            
+            # Publish the command
+            self.joint_pub.publish(self.active_joint_cmd)
+            
+            # Decrement counter
+            self.joint_cmd_count -= 1
+            
+            # Clear when done
+            if self.joint_cmd_count == 0:
+                self.active_joint_cmd = None
+                self.get_logger().info('Joint command sequence complete (1.5s elapsed)')
 
+        # Always publish base velocity
         self.base_twist_pub.publish(self.cmd_vel)
 
     def inc_linear(self):
@@ -150,78 +172,43 @@ class TeleopController(Node):
     def gripper_close(self):
         self.send_gripper_goal(-0.015)
 
-    def move_pose(self, key: str, duration_sec: float = 1.5, rate_hz: float = 100.0):
-    """
-    Stream JointJog.velocities for a short period so the arm actually moves.
-    POSES[key] is interpreted as per-joint VELOCITIES (rad/s).
-    No extra dependencies are required.
-    """
-    if key not in POSES:
-        self.get_logger().warn(f'Pose key "{key}" not found in POSES')
-        return
-
-    pose_data = POSES[key]  # dict: joint_name -> velocity (rad/s)
-    joint_names = list(pose_data.keys())
-    velocities  = [float(pose_data[j]) for j in joint_names]
-
-    period = 1.0 / rate_hz
-    t_end  = time.time() + float(duration_sec)
-
-    # Stream the same velocity command at a fixed rate
-    while time.time() < t_end:
-        jj = JointJog()
-        jj.header.stamp = self.get_clock().now().to_msg()
-        jj.header.frame_id = BASE_FRAME_ID
-        jj.joint_names = joint_names
-        jj.velocities  = velocities
-        self.joint_pub.publish(jj)
-        time.sleep(period)
-
-    self.get_logger().info(f'Moving (velocity jog) to pose key: {key}')
-
-
-    # def move_pose(self, key: str):
-    #     """
-    #     Send joint velocities for the specified pose.
+    def move_pose(self, key: str):
+        """
+        Send joint velocities for the specified pose.
         
-    #     Args:
-    #         key: Pose key from POSES dictionary
-    #     """
-    #     if key not in POSES:
-    #         self.get_logger().warn(f'Pose key "{key}" not found in POSES')
-    #         return
+        CRITICAL: MoveIt Servo requires CONTINUOUS velocity commands.
+        We publish the same velocity command repeatedly for 1.5 seconds.
         
-    #     # Clear previous joint command
-    #     self.joint_msg = JointJog()
-    #     self.joint_msg.header.frame_id = BASE_FRAME_ID
+        Args:
+            key: Pose key from POSES dictionary
+        """
+        if key not in POSES:
+            self.get_logger().warn(f'Pose key "{key}" not found in POSES. Available: {list(POSES.keys())}')
+            return
         
-    #     # JointJog message structure:
-    #     # - header
-    #     # - joint_names (list of strings)
-    #     # - displacements (list of floats) - for position control
-    #     # - velocities (list of floats) - for velocity control
-    #     # - duration (float)
+        # Create new JointJog message
+        joint_cmd = JointJog()
+        joint_cmd.header.frame_id = BASE_FRAME_ID
+        joint_cmd.header.stamp = self.get_clock().now().to_msg()
         
-    #     # Build lists from POSES dictionary
-    #     pose_data = POSES[key]
+        # Get pose data
+        pose_data = POSES[key]
         
-    #     # Extract joint names and velocities
-    #     joint_names = []
-    #     velocities = []
+        # Build joint names and velocities
+        joint_cmd.joint_names = list(pose_data.keys())
+        joint_cmd.velocities = list(pose_data.values())
+        joint_cmd.duration = 0.0  # Let servo control duration
         
-    #     for joint, value in pose_data.items():
-    #         joint_names.append(joint)
-    #         velocities.append(value)
+        # Store for continuous publishing (1.5 seconds)
+        self.active_joint_cmd = joint_cmd
+        self.joint_cmd_count = self.joint_cmd_duration
         
-    #     # Set the JointJog fields
-    #     self.joint_msg.joint_names = joint_names
-    #     self.joint_msg.velocities = velocities
-    #     self.joint_msg.duration = 0.0  # Use servo's default duration
-        
-    #     # Flag for publishing in next publish_loop cycle
-    #     self.publish_joint_pending = True
-        
-    #     self.get_logger().info(f'Moving to pose: {key}')
+        self.get_logger().info(
+            f'Moving to pose: {key}\n'
+            f'  Joints: {joint_cmd.joint_names}\n'
+            f'  Velocities: {joint_cmd.velocities}\n'
+            f'  Duration: 1.5 seconds ({self.joint_cmd_duration} publishes at 100Hz)'
+        )
 
     def shutdown(self):
         self.stop_moveit_servo()
