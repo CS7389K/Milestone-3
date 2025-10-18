@@ -3,10 +3,12 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
 
-from geometry_msgs.msg import Twist, TwistStamped
-from control_msgs.msg import JointJog
-from control_msgs.action import GripperCommand
+from geometry_msgs.msg import Twist
+from control_msgs.action import GripperCommand, FollowJointTrajectory
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from sensor_msgs.msg import JointState
 from std_srvs.srv import Trigger
+from builtin_interfaces.msg import Duration
 
 from .util.constants import (
     CONTROLLER_NAME,
@@ -14,15 +16,12 @@ from .util.constants import (
     ARM_JOINT_TOPIC,
     GRIPPER_ACTION,
     ROS_QUEUE_SIZE,
-    ARM_TWIST_TOPIC,
     BASE_LINEAR_VEL_MAX,
     BASE_LINEAR_VEL_STEP,
     BASE_ANGULAR_VEL_MAX,
     BASE_ANGULAR_VEL_STEP,
-    BASE_FRAME_ID,
     SERVO_START_SRV,
     SERVO_STOP_SRV,
-    POSES
 )
 
 
@@ -33,20 +32,26 @@ class TeleopController(Node):
     - https://github.com/ROBOTIS-GIT/turtlebot3_manipulation/blob/humble/turtlebot3_manipulation_teleop/include/turtlebot3_manipulation_teleop/turtlebot3_manipulation_teleop.hpp
     """
 
+    # you can tune these two to taste
+    JOINT_NAMES = ("joint1", "joint2", "joint3", "joint4")
+    JOINT_STEP  = 0.05   # radians per key press
+    TRAJ_TIME_S = 0.6    # seconds to reach each nudge
+
     def __init__(self):
         super().__init__(CONTROLLER_NAME)
         # Create node interactions
         self.servo_start_client = self.create_client(Trigger, SERVO_START_SRV)
         self.servo_stop_client  = self.create_client(Trigger, SERVO_STOP_SRV)
         self.base_twist_pub = self.create_publisher(Twist, BASE_TWIST_TOPIC, ROS_QUEUE_SIZE)
-        self.arm_twist_pub = self.create_publisher(TwistStamped, ARM_TWIST_TOPIC, ROS_QUEUE_SIZE)
-        self.joint_pub = self.create_publisher(JointJog, ARM_JOINT_TOPIC, ROS_QUEUE_SIZE)
+        self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self._on_joint_state, 10)
+        self.arm_traj_ac = ActionClient(self, FollowJointTrajectory, ARM_JOINT_TOPIC)
         self.gripper_client = ActionClient(self, GripperCommand, GRIPPER_ACTION)
 
         self.pub_timer = self.create_timer(0.01, self.publish_loop)
         self.cmd_vel = Twist()
-        self.joint_msg = JointJog()
-        self.test = False
+        self._have_js = False
+        self._js_pos = {j: 0.0 for j in self.JOINT_NAMES}
+        self._target_pos = {j: 0.0 for j in self.JOINT_NAMES}
 
         # Start moveit interface
         self.connect_moveit_servo()
@@ -107,13 +112,7 @@ class TeleopController(Node):
         self.gripper_client.send_goal_async(goal)
 
     def publish_loop(self):
-        # self.joint_msg.header.stamp = self.get_clock().now().to_msg()
-        # self.joint_msg.header.frame_id = BASE_FRAME_ID
-
         self.base_twist_pub.publish(self.cmd_vel)
-
-        if self.test:
-            self.joint_pub.publish(self.joint_msg)
 
     def inc_linear(self):
         self.cmd_vel.linear.x = min(self.cmd_vel.linear.x + BASE_LINEAR_VEL_STEP, BASE_LINEAR_VEL_MAX)
@@ -151,11 +150,71 @@ class TeleopController(Node):
         # self.get_logger().info('Gripper CLOSE command sent')
         self.send_gripper_goal(-0.015)
 
+    def _on_joint_state(self, msg: JointState):
+        # Map name->index for positions
+        name_to_idx = {n: i for i, n in enumerate(msg.name)}
+        updated = False
+        for j in self.JOINT_NAMES:
+            if j in name_to_idx and name_to_idx[j] < len(msg.position):
+                self._js_pos[j] = float(msg.position[name_to_idx[j]])
+                updated = True
+        if updated and not self._have_js:
+            # initialize targets to current positions on first reception
+            self._target_pos = dict(self._js_pos)
+            self._have_js = True
+            self.get_logger().info('Joint states received; targets initialized.')
+
+    def _send_arm_goal(self):
+        if not self.arm_traj_ac.server_is_ready():
+            self.get_logger().warn('FollowJointTrajectory action server not ready.')
+            return
+
+        jt = JointTrajectory()
+        jt.joint_names = list(self.JOINT_NAMES)
+
+        pt = JointTrajectoryPoint()
+        pt.positions = [self._target_pos[j] for j in self.JOINT_NAMES]
+        pt.time_from_start = Duration(sec=int(self.TRAJ_TIME_S),
+                                      nanosec=int((self.TRAJ_TIME_S % 1.0) * 1e9))
+        jt.points = [pt]
+
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory = jt
+
+        self.get_logger().info(
+            'Sending traj: ' + ', '.join(f'{j}={self._target_pos[j]:.3f}' for j in self.JOINT_NAMES)
+        )
+        self.arm_traj_ac.send_goal_async(goal)  # fire-and-forget for teleop
+
+    def step_joint(self, joint_name: str, delta: float):
+        """
+        Nudge a single joint by `delta` radians and send a one-point trajectory.
+        """
+        if joint_name not in self._target_pos:
+            self.get_logger().warn(f'Unknown joint: {joint_name}')
+            return
+        if not self._have_js:
+            self.get_logger().warn('No /joint_states yet; cannot send trajectory.')
+            return
+
+        self._target_pos[joint_name] += float(delta)
+        self._send_arm_goal()
+
     def move_pose(self, key: str):
-            self.test = True
-            self.joint_msg.joint_names.append("joint1")
-            self.joint_msg.velocities.append(1.0)
-            # self.joint_msg.duration = 2.0
+        """
+        Optional convenience: map keys to joint steps.
+        Use e.g. '1','2','3','4' for +, and 'q','w','e','r' for -.
+        """
+        plus = {'1': 'joint1', '2': 'joint2', '3': 'joint3', '4': 'joint4'}
+        minus = {'q': 'joint1', 'w': 'joint2', 'e': 'joint3', 'r': 'joint4'}
+
+        if key in plus:
+            self.step_joint(plus[key], +self.JOINT_STEP)
+        elif key in minus:
+            self.step_joint(minus[key], -self.JOINT_STEP)
+        else:
+            # not a joint key; ignore here (base/gripper handled elsewhere)
+            pass
 
     def shutdown(self):
         self.get_logger().info('Shutting down controller...')

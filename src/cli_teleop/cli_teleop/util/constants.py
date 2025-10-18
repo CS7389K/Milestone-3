@@ -3,8 +3,7 @@ SERVO_START_SRV = '/servo_server/start_servo'
 SERVO_STOP_SRV  = '/servo_server/stop_servo'
 
 BASE_TWIST_TOPIC = 'cmd_vel'
-ARM_TWIST_TOPIC = "/servo_server/delta_twist_cmds"
-ARM_JOINT_TOPIC  = '/servo_server/delta_joint_cmds'
+ARM_JOINT_TOPIC  = '/arm_controller/follow_joint_trajectory'
 GRIPPER_ACTION   = '/gripper_controller/gripper_cmd'
 
 ROS_QUEUE_SIZE = 10
