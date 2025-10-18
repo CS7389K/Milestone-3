@@ -46,6 +46,7 @@ class TeleopController(Node):
         self.publish_joint_pending = False
         self.pub_timer = self.create_timer(0.01, self.publish_loop)
         self.cmd_vel = Twist()
+        self.joint_msg = JointJog()
 
         # Start moveit interface
         self.connect_moveit_servo()
@@ -160,8 +161,8 @@ class TeleopController(Node):
     def move_pose(self, key: str):
         if key in POSES:
             for joint, value in POSES[key].items():
-                self.joint_msg_.joint_names.push_back(joint)
-                self.joint_msg_.velocities.push_back(value)
+                self.joint_msg.joint_names.push_back(joint)
+                self.joint_msg.velocities.push_back(value)
             self.publish_joint_pending = True
 
     def shutdown(self):
