@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
+import time 
 
 from geometry_msgs.msg import Twist
 from control_msgs.msg import JointJog
@@ -149,48 +150,78 @@ class TeleopController(Node):
     def gripper_close(self):
         self.send_gripper_goal(-0.015)
 
-    def move_pose(self, key: str):
-        """
-        Send joint velocities for the specified pose.
+    def move_pose(self, key: str, duration_sec: float = 1.5, rate_hz: float = 100.0):
+    """
+    Stream JointJog.velocities for a short period so the arm actually moves.
+    POSES[key] is interpreted as per-joint VELOCITIES (rad/s).
+    No extra dependencies are required.
+    """
+    if key not in POSES:
+        self.get_logger().warn(f'Pose key "{key}" not found in POSES')
+        return
+
+    pose_data = POSES[key]  # dict: joint_name -> velocity (rad/s)
+    joint_names = list(pose_data.keys())
+    velocities  = [float(pose_data[j]) for j in joint_names]
+
+    period = 1.0 / rate_hz
+    t_end  = time.time() + float(duration_sec)
+
+    # Stream the same velocity command at a fixed rate
+    while time.time() < t_end:
+        jj = JointJog()
+        jj.header.stamp = self.get_clock().now().to_msg()
+        jj.header.frame_id = BASE_FRAME_ID
+        jj.joint_names = joint_names
+        jj.velocities  = velocities
+        self.joint_pub.publish(jj)
+        time.sleep(period)
+
+    self.get_logger().info(f'Moving (velocity jog) to pose key: {key}')
+
+
+    # def move_pose(self, key: str):
+    #     """
+    #     Send joint velocities for the specified pose.
         
-        Args:
-            key: Pose key from POSES dictionary
-        """
-        if key not in POSES:
-            self.get_logger().warn(f'Pose key "{key}" not found in POSES')
-            return
+    #     Args:
+    #         key: Pose key from POSES dictionary
+    #     """
+    #     if key not in POSES:
+    #         self.get_logger().warn(f'Pose key "{key}" not found in POSES')
+    #         return
         
-        # Clear previous joint command
-        self.joint_msg = JointJog()
-        self.joint_msg.header.frame_id = BASE_FRAME_ID
+    #     # Clear previous joint command
+    #     self.joint_msg = JointJog()
+    #     self.joint_msg.header.frame_id = BASE_FRAME_ID
         
-        # JointJog message structure:
-        # - header
-        # - joint_names (list of strings)
-        # - displacements (list of floats) - for position control
-        # - velocities (list of floats) - for velocity control
-        # - duration (float)
+    #     # JointJog message structure:
+    #     # - header
+    #     # - joint_names (list of strings)
+    #     # - displacements (list of floats) - for position control
+    #     # - velocities (list of floats) - for velocity control
+    #     # - duration (float)
         
-        # Build lists from POSES dictionary
-        pose_data = POSES[key]
+    #     # Build lists from POSES dictionary
+    #     pose_data = POSES[key]
         
-        # Extract joint names and velocities
-        joint_names = []
-        velocities = []
+    #     # Extract joint names and velocities
+    #     joint_names = []
+    #     velocities = []
         
-        for joint, value in pose_data.items():
-            joint_names.append(joint)
-            velocities.append(value)
+    #     for joint, value in pose_data.items():
+    #         joint_names.append(joint)
+    #         velocities.append(value)
         
-        # Set the JointJog fields
-        self.joint_msg.joint_names = joint_names
-        self.joint_msg.velocities = velocities
-        self.joint_msg.duration = 0.0  # Use servo's default duration
+    #     # Set the JointJog fields
+    #     self.joint_msg.joint_names = joint_names
+    #     self.joint_msg.velocities = velocities
+    #     self.joint_msg.duration = 0.0  # Use servo's default duration
         
-        # Flag for publishing in next publish_loop cycle
-        self.publish_joint_pending = True
+    #     # Flag for publishing in next publish_loop cycle
+    #     self.publish_joint_pending = True
         
-        self.get_logger().info(f'Moving to pose: {key}')
+    #     self.get_logger().info(f'Moving to pose: {key}')
 
     def shutdown(self):
         self.stop_moveit_servo()
