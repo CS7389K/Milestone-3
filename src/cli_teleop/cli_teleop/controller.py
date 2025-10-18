@@ -22,6 +22,7 @@ from .util.constants import (
     BASE_ANGULAR_VEL_STEP,
     SERVO_START_SRV,
     SERVO_STOP_SRV,
+    POSES,
 )
 
 
@@ -52,6 +53,9 @@ class TeleopController(Node):
         self._have_js = False
         self._js_pos = {j: 0.0 for j in self.JOINT_NAMES}
         self._target_pos = {j: 0.0 for j in self.JOINT_NAMES}
+
+        self.home = None
+        self.first_boot = True
 
         # Start moveit interface
         self.connect_moveit_servo()
@@ -160,6 +164,7 @@ class TeleopController(Node):
                 updated = True
         if updated and not self._have_js:
             # initialize targets to current positions on first reception
+            self.home = dict(self._js_pos)
             self._target_pos = dict(self._js_pos)
             self._have_js = True
             self.get_logger().info('Joint states received; targets initialized.')
@@ -180,11 +185,7 @@ class TeleopController(Node):
 
         goal = FollowJointTrajectory.Goal()
         goal.trajectory = jt
-
-        self.get_logger().info(
-            'Sending traj: ' + ', '.join(f'{j}={self._target_pos[j]:.3f}' for j in self.JOINT_NAMES)
-        )
-        self.arm_traj_ac.send_goal_async(goal)  # fire-and-forget for teleop
+        self.arm_traj_ac.send_goal_async(goal)
 
     def step_joint(self, joint_name: str, delta: float):
         """
@@ -201,7 +202,9 @@ class TeleopController(Node):
         self._send_arm_goal()
 
     def move_pose(self, key: str):
-        self.step_joint("joint1", +self.JOINT_STEP)
+        print("HOME", str(self.HOME))
+        for joint, value in POSES[key].items():
+            self.step_joint(joint, value)
 
     def shutdown(self):
         self.get_logger().info('Shutting down controller...')
