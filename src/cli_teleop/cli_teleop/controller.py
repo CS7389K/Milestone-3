@@ -201,20 +201,7 @@ class TeleopController(Node):
         self._send_arm_goal()
 
     def move_pose(self, key: str):
-        """
-        Optional convenience: map keys to joint steps.
-        Use e.g. '1','2','3','4' for +, and 'q','w','e','r' for -.
-        """
-        plus = {'1': 'joint1', '2': 'joint2', '3': 'joint3', '4': 'joint4'}
-        minus = {'q': 'joint1', 'w': 'joint2', 'e': 'joint3', 'r': 'joint4'}
-
-        if key in plus:
-            self.step_joint(plus[key], +self.JOINT_STEP)
-        elif key in minus:
-            self.step_joint(minus[key], -self.JOINT_STEP)
-        else:
-            # not a joint key; ignore here (base/gripper handled elsewhere)
-            pass
+        self.step_joint("joint1", +self.JOINT_STEP)
 
     def shutdown(self):
         self.get_logger().info('Shutting down controller...')
