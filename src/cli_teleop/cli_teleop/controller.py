@@ -43,6 +43,7 @@ class TeleopController(Node):
         self.joint_pub = self.create_publisher(JointJog, ARM_JOINT_TOPIC, ROS_QUEUE_SIZE)
         self.gripper_client = ActionClient(self, GripperCommand, GRIPPER_ACTION)
 
+        self.publish_joint_pending = False
         self.pub_timer = self.create_timer(0.01, self.publish_loop)
         self.cmd_vel = Twist()
 
