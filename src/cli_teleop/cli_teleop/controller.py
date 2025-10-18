@@ -152,7 +152,8 @@ class TeleopController(Node):
         if key in POSES:
             for joint, value in POSES[key].items():
                 self.joint_msg.joint_names.append(joint)
-                self.joint_msg.velocities.append(value)
+                self.joint_msg.displacements.append(value)
+                self.joint_msg.duration = 0.1
 
     def shutdown(self):
         self.get_logger().info('Shutting down controller...')
