@@ -103,13 +103,11 @@ class TeleopController(Node):
         goal.command.position = float(position)
         goal.command.max_effort = -1.0
 
-        # self.get_logger().info('Sending gripper goal')
         self.gripper_client.send_goal_async(goal).add_done_callback(self.on_gripper_goal_sent)
 
     def on_gripper_goal_sent(self, future):
         goal_handle = future.result()
         if not goal_handle.accepted:
-            # self.get_logger().warn('Gripper goal rejected')
             return
         goal_handle.get_result_async()
 
@@ -119,7 +117,6 @@ class TeleopController(Node):
             self.joint_msg.header.frame_id = BASE_FRAME_ID
             self.joint_pub.publish(self.joint_msg)
             self.publish_joint_pending = False
-            # self.get_logger().info("Joint PUB")
 
         self.base_twist_pub.publish(self.cmd_vel)
 
@@ -153,11 +150,47 @@ class TeleopController(Node):
         self.send_gripper_goal(-0.015)
 
     def move_pose(self, key: str):
-        if key in POSES:
-            for joint, value in POSES[key].items():
-                self.joint_msg_.joint_names.push_back(joint)
-                self.joint_msg_.velocities.push_back(value)
-            self.publish_joint_pending = True
+        """
+        Send joint velocities for the specified pose.
+        
+        Args:
+            key: Pose key from POSES dictionary
+        """
+        if key not in POSES:
+            self.get_logger().warn(f'Pose key "{key}" not found in POSES')
+            return
+        
+        # Clear previous joint command
+        self.joint_msg = JointJog()
+        self.joint_msg.header.frame_id = BASE_FRAME_ID
+        
+        # JointJog message structure:
+        # - header
+        # - joint_names (list of strings)
+        # - displacements (list of floats) - for position control
+        # - velocities (list of floats) - for velocity control
+        # - duration (float)
+        
+        # Build lists from POSES dictionary
+        pose_data = POSES[key]
+        
+        # Extract joint names and velocities
+        joint_names = []
+        velocities = []
+        
+        for joint, value in pose_data.items():
+            joint_names.append(joint)
+            velocities.append(value)
+        
+        # Set the JointJog fields
+        self.joint_msg.joint_names = joint_names
+        self.joint_msg.velocities = velocities
+        self.joint_msg.duration = 0.0  # Use servo's default duration
+        
+        # Flag for publishing in next publish_loop cycle
+        self.publish_joint_pending = True
+        
+        self.get_logger().info(f'Moving to pose: {key}')
 
     def shutdown(self):
         self.stop_moveit_servo()
