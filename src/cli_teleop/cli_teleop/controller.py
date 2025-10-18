@@ -202,7 +202,7 @@ class TeleopController(Node):
         self._send_arm_goal()
 
     def move_pose(self, key: str):
-        print("HOME", str(self.HOME))
+        print("HOME", str(self.home))
         for joint, value in POSES[key].items():
             self.step_joint(joint, value)
 
