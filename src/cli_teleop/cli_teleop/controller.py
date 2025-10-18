@@ -43,7 +43,6 @@ class TeleopController(Node):
         self.joint_pub = self.create_publisher(JointJog, ARM_JOINT_TOPIC, ROS_QUEUE_SIZE)
         self.gripper_client = ActionClient(self, GripperCommand, GRIPPER_ACTION)
 
-        self.publish_joint_pending = False
         self.pub_timer = self.create_timer(0.01, self.publish_loop)
         self.cmd_vel = Twist()
         self.joint_msg = JointJog()
@@ -104,23 +103,14 @@ class TeleopController(Node):
         goal.command.position = float(position)
         goal.command.max_effort = -1.0
 
-        self.gripper_client.send_goal_async(goal).add_done_callback(self.on_gripper_goal_sent)
-
-    def on_gripper_goal_sent(self, future):
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            return
-        goal_handle.get_result_async()
+        self.gripper_client.send_goal_async(goal)
 
     def publish_loop(self):
-        if self.publish_joint_pending:
-            self.joint_msg.header.stamp = self.get_clock().now().to_msg()
-            self.joint_msg.header.frame_id = BASE_FRAME_ID
-            self.joint_pub.publish(self.joint_msg)
-            self.publish_joint_pending = False
-            self.get_logger().info("Joint PUB")
+        # self.joint_msg.header.stamp = self.get_clock().now().to_msg()
+        # self.joint_msg.header.frame_id = BASE_FRAME_ID
 
         self.base_twist_pub.publish(self.cmd_vel)
+        self.joint_pub.publish(self.joint_msg)
 
     def inc_linear(self):
         self.cmd_vel.linear.x = min(self.cmd_vel.linear.x + BASE_LINEAR_VEL_STEP, BASE_LINEAR_VEL_MAX)
@@ -161,9 +151,8 @@ class TeleopController(Node):
     def move_pose(self, key: str):
         if key in POSES:
             for joint, value in POSES[key].items():
-                self.joint_msg.joint_names.push_back(joint)
-                self.joint_msg.velocities.push_back(value)
-            self.publish_joint_pending = True
+                self.joint_msg.joint_names.append(joint)
+                self.joint_msg.velocities.append(value)
 
     def shutdown(self):
         self.get_logger().info('Shutting down controller...')
