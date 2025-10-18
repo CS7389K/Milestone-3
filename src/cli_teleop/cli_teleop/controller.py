@@ -46,6 +46,7 @@ class TeleopController(Node):
         self.pub_timer = self.create_timer(0.01, self.publish_loop)
         self.cmd_vel = Twist()
         self.joint_msg = JointJog()
+        self.test = False
 
         # Start moveit interface
         self.connect_moveit_servo()
@@ -110,7 +111,9 @@ class TeleopController(Node):
         # self.joint_msg.header.frame_id = BASE_FRAME_ID
 
         self.base_twist_pub.publish(self.cmd_vel)
-        self.joint_pub.publish(self.joint_msg)
+
+        if self.test:
+            self.joint_pub.publish(self.joint_msg)
 
     def inc_linear(self):
         self.cmd_vel.linear.x = min(self.cmd_vel.linear.x + BASE_LINEAR_VEL_STEP, BASE_LINEAR_VEL_MAX)
@@ -149,11 +152,10 @@ class TeleopController(Node):
         self.send_gripper_goal(-0.015)
 
     def move_pose(self, key: str):
-        if key in POSES:
-            for joint, value in POSES[key].items():
-                self.joint_msg.joint_names.append(joint)
-                self.joint_msg.displacements.append(value)
-                self.joint_msg.duration = 2.0
+            self.test = True
+            self.joint_msg.joint_names.append("joint1")
+            self.joint_msg.velocities.append(1.0)
+            # self.joint_msg.duration = 2.0
 
     def shutdown(self):
         self.get_logger().info('Shutting down controller...')
