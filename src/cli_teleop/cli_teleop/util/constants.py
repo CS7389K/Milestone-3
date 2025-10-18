@@ -1,6 +1,6 @@
 CONTROLLER_NAME = 'servo_keyboard_input'
 SERVO_START_SRV = '/servo_server/start_servo'
-SERVO_STOP_SRV  = '/servo_server/sstop_servotop'
+SERVO_STOP_SRV  = '/servo_server/stop_servo'
 
 BASE_TWIST_TOPIC = 'cmd_vel'
 ARM_TWIST_TOPIC = "/servo_server/delta_twist_cmds"
