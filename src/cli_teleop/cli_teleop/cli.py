@@ -115,12 +115,13 @@ class CLI():
                 raise SystemExit
 
     def print_menu(self):
-        s = self.controller.state
-        sys.stdout.write(MENU.format(
-            lin=s.base.linear, ang=s.base.angular,
-            J1=s.arm.J1, J2=s.arm.J2, J3=s.arm.J3, J4=s.arm.J4,
-            x=s.base.x, y=s.base.y, z=s.base.z
-        ))
+        # s = self.controller.state
+        # sys.stdout.write(MENU.format(
+        #     lin=s.base.linear, ang=s.base.angular,
+        #     J1=s.arm.J1, J2=s.arm.J2, J3=s.arm.J3, J4=s.arm.J4,
+        #     x=s.base.x, y=s.base.y, z=s.base.z
+        # ))
+        sys.stdout.write(MENU)
         sys.stdout.flush()
 
     def shutdown(self):
