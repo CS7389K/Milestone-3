@@ -154,7 +154,7 @@ class TeleopController(Node):
 
     def move_pose(self, key: str):
         if key in POSES:
-            for joint, value in POSES[key].values():
+            for joint, value in POSES[key].items():
                 self.joint_msg_.joint_names.push_back(joint)
                 self.joint_msg_.velocities.push_back(value)
             self.publish_joint_pending = True
