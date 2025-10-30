@@ -13,8 +13,8 @@ In this milestone, you will try operating a physical robot arm and write a ROS 2
 
 1. Clone the repository
 ```sh
-git clone https://github.com/andrewscouten/CS7389K_Homework_3.git
-cd CS7389K_Homework_3
+git clone https://github.com/CS7389K/Milestone-3.git
+cd Milestone-3
 ```
 
 2. ROS2 Foxy requires Ubuntu 20.04, so ensure it's what you're using. If you're using windows, run the following to use WSL:
