@@ -27,7 +27,7 @@ sudo apt install ros-foxy-desktop python3-argcomplete -y
 # ROS2 - Devtools
 sudo apt install ros-dev-tools -y
 # Activate ROS2 Environment
-source /opt/ros/foxy/setup.bash
+. /opt/ros/foxy/setup.sh
 # TurtleBot3 Dependencies
 sudo apt install -y \
   python3-colcon-common-extensions \
@@ -44,19 +44,14 @@ sudo apt install -y \
 # TurtleBot3 Modules
 mkdir -p ~/turtlebot3_ws/src
 cd ~/turtlebot3_ws/src/
-git clone -b foxy https://github.com/ROBOTIS-GIT/DynamixelSDK.git
-git clone -b foxy https://github.com/ROBOTIS-GIT/turtlebot3_msgs.git
-git clone -b foxy https://github.com/ROBOTIS-GIT/turtlebot3.git
-git clone -b foxy https://github.com/ROBOTIS-GIT/turtlebot3_simulations.git
-git clone -b foxy https://github.com/ROBOTIS-GIT/turtlebot3_manipulation.git
+# git clone -b foxy-devel https://github.com/ROBOTIS-GIT/turtlebot3_simulations.git
+git clone -b foxy-devel https://github.com/ROBOTIS-GIT/turtlebot3_manipulation.git
 cd ~/turtlebot3_ws
 colcon build --symlink-install
 
 ## Environment
-echo 'export TURTLEBOT3_MODEL=burger' >> ~/.bashrc
-echo 'export ROS_DOMAIN_ID=30 #TURTLEBOT3' >> ~/.bashrc
-echo 'source /opt/ros/foxy/setup.bash' >> ~/.bashrc
-echo 'source ~/turtlebot3_ws/install/setup.bash' >> ~/.bashrc
-echo 'source /usr/share/gazebo/setup.sh' >> ~/.bashrc
-echo 'source /opt/ros/foxy/setup.bash' >> ~/.bashrc
-source ~/.bashrc
+sudo echo 'export TURTLEBOT3_MODEL=burger' >> ~/.bashrc
+sudo echo 'export ROS_DOMAIN_ID=30 #TURTLEBOT3' >> ~/.bashrc
+sudo echo '. ~/turtlebot3_ws/install/setup.sh' >> ~/.bashrc
+sudo echo '. /usr/share/gazebo/setup.sh' >> ~/.bashrc
+sudo echo '. /opt/ros/foxy/setup.bash' >> ~/.bashrc
